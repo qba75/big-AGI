@@ -19,10 +19,14 @@ import { ButtonStackBlitz, isStackBlitzSupported } from './ButtonStackBlitz';
 import { heuristicIsHtml, IFrameComponent } from '../RenderHtml';
 import { patchSvgString, RenderCodeMermaid } from './RenderCodeMermaid';
 
+export function getPlantUmlServerUrl(): string {
+  // set at nextjs build time
+  return process.env.NEXT_PUBLIC_PLANTUML_SERVER_URL || 'https://www.plantuml.com/plantuml/svg/';
+}
 
 async function fetchPlantUmlSvg(plantUmlCode: string): Promise<string | null> {
   // Get the PlantUML server from inline env var
-  let plantUmlServerUrl = process.env.NEXT_PUBLIC_PLANTUML_SERVER_URL || 'https://www.plantuml.com/plantuml/svg/';
+  let plantUmlServerUrl = getPlantUmlServerUrl();
   if (!plantUmlServerUrl.endsWith('/'))
     plantUmlServerUrl += '/';
 
@@ -61,13 +65,14 @@ async function fetchPlantUmlSvg(plantUmlCode: string): Promise<string | null> {
 
 
 export const overlayButtonsSx: SxProps = {
-  position: 'absolute', top: 0, right: 0, zIndex: 10,
+  position: 'absolute', top: 0, right: 0, zIndex: 2, /* top of message and its chips */
   display: 'flex', flexDirection: 'row', gap: 1,
-  opacity: 0, transition: 'opacity 0.15s',
-  // '& > button': {
-  // backgroundColor: 'background.level2',
-  // backdropFilter: 'blur(12px)',
-  // },
+  opacity: 0, transition: 'opacity 0.2s cubic-bezier(.17,.84,.44,1)',
+  // buttongroup: background
+  '& > div > button': {
+    backgroundColor: 'background.surface',
+    // backdropFilter: 'blur(12px)',
+  },
 };
 
 

@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { shallow } from 'zustand/shallow';
 
-import { Box, Dropdown, IconButton, ListDivider, ListItem, ListItemButton, ListItemDecorator, Menu, MenuButton, MenuItem, Tooltip, Typography } from '@mui/joy';
+import { Box, Button, Dropdown, IconButton, ListDivider, ListItem, ListItemButton, ListItemDecorator, Menu, MenuButton, MenuItem, Tooltip, Typography } from '@mui/joy';
 import AddIcon from '@mui/icons-material/Add';
 import CheckIcon from '@mui/icons-material/Check';
 import ClearIcon from '@mui/icons-material/Clear';
@@ -19,6 +19,7 @@ import { FoldersToggleOff } from '~/common/components/icons/FoldersToggleOff';
 import { FoldersToggleOn } from '~/common/components/icons/FoldersToggleOn';
 import { PageDrawerHeader } from '~/common/layout/optima/components/PageDrawerHeader';
 import { PageDrawerList } from '~/common/layout/optima/components/PageDrawerList';
+import { capitalizeFirstLetter } from '~/common/util/textUtils';
 import { themeScalingMap, themeZIndexOverMobileDrawer } from '~/common/app.theme';
 import { useOptimaDrawers } from '~/common/layout/optima/useOptimaDrawers';
 import { useUIPreferencesStore } from '~/common/state/store-ui';
@@ -27,6 +28,7 @@ import { ChatDrawerItemMemo, FolderChangeRequest } from './ChatDrawerItem';
 import { ChatFolderList } from './folders/ChatFolderList';
 import { ChatNavGrouping, useChatNavRenderItems } from './useChatNavRenderItems';
 import { ClearFolderText } from './folders/useFolderDropdown';
+import { useChatShowPersonaIcons, useChatShowRelativeSize } from '../store-app-chat';
 
 
 // this is here to make shallow comparisons work on the next hook
@@ -77,9 +79,11 @@ function ChatDrawer(props: {
 
   // external state
   const { closeDrawer, closeDrawerOnMobile } = useOptimaDrawers();
+  const { showPersonaIcons, togglePersonaIcons } = useChatShowPersonaIcons();
+  const { showRelativeSize, toggleRelativeSize } = useChatShowRelativeSize();
   const { activeFolder, allFolders, enableFolders, toggleEnableFolders } = useFolders(props.activeFolderId);
   const { filteredChatsCount, filteredChatIDs, filteredChatsAreEmpty, filteredChatsBarBasis, filteredChatsIncludeActive, renderNavItems } = useChatNavRenderItems(
-    props.activeConversationId, props.chatPanesConversationIds, debouncedSearchQuery, activeFolder, allFolders, navGrouping,
+    props.activeConversationId, props.chatPanesConversationIds, debouncedSearchQuery, activeFolder, allFolders, navGrouping, showRelativeSize,
   );
   const { contentScaling, showSymbols } = useUIPreferencesStore(state => ({
     contentScaling: state.contentScaling,
@@ -140,22 +144,42 @@ function ChatDrawer(props: {
   const groupingComponent = React.useMemo(() => (
     <Dropdown>
       <MenuButton
-        aria-label='Group by'
+        aria-label='View options'
         slots={{ root: IconButton }}
         slotProps={{ root: { size: 'sm' } }}
       >
         <MoreVertIcon sx={{ fontSize: 'xl' }} />
       </MenuButton>
-      <Menu placement='bottom-start' sx={{ zIndex: themeZIndexOverMobileDrawer /* need to be on top of the Modal on Mobile */ }}>
+      <Menu placement='bottom-start' sx={{ minWidth: 180, zIndex: themeZIndexOverMobileDrawer /* need to be on top of the Modal on Mobile */ }}>
+        <ListItem>
+          <Typography level='body-sm'>Group By</Typography>
+        </ListItem>
         {(['date', 'persona'] as const).map(_gName => (
-          <MenuItem key={'group-' + _gName} selected={navGrouping === _gName} onClick={() => setNavGrouping(grouping => grouping === _gName ? false : _gName)}>
+          <MenuItem
+            key={'group-' + _gName}
+            aria-label={`Group by ${_gName}`}
+            selected={navGrouping === _gName}
+            onClick={() => setNavGrouping(grouping => grouping === _gName ? false : _gName)}
+          >
             <ListItemDecorator>{navGrouping === _gName && <CheckIcon />}</ListItemDecorator>
-            Group by {_gName}
+            {capitalizeFirstLetter(_gName)}
           </MenuItem>
         ))}
+        <ListDivider />
+        <ListItem>
+          <Typography level='body-sm'>Show</Typography>
+        </ListItem>
+        <MenuItem onClick={togglePersonaIcons}>
+          <ListItemDecorator>{showPersonaIcons && <CheckIcon />}</ListItemDecorator>
+          Persona Icons
+        </MenuItem>
+        <MenuItem onClick={toggleRelativeSize}>
+          <ListItemDecorator>{showRelativeSize && <CheckIcon />}</ListItemDecorator>
+          Relative Size
+        </MenuItem>
       </Menu>
     </Dropdown>
-  ), [navGrouping]);
+  ), [navGrouping, showPersonaIcons, showRelativeSize, togglePersonaIcons, toggleRelativeSize]);
 
 
   return <>
@@ -163,7 +187,7 @@ function ChatDrawer(props: {
     {/* Drawer Header */}
     <PageDrawerHeader title='Chats' onClose={closeDrawer}>
       <Tooltip title={enableFolders ? 'Hide Folders' : 'Use Folders'}>
-        <IconButton onClick={toggleEnableFolders}>
+        <IconButton size='sm' onClick={toggleEnableFolders}>
           {enableFolders ? <FoldersToggleOn /> : <FoldersToggleOff />}
         </IconButton>
       </Tooltip>
@@ -195,43 +219,49 @@ function ChatDrawer(props: {
 
       {enableFolders && <ListDivider sx={{ mb: 0 }} />}
 
-      {/* Search Input Field */}
-      <DebounceInputMemo
-        minChars={2}
-        onDebounce={setDebouncedSearchQuery}
-        debounceTimeout={300}
-        placeholder='Search...'
-        aria-label='Search'
-        endDecorator={groupingComponent}
-        sx={{ m: 2 }}
-      />
+      <Box sx={{ display: 'flex', flexDirection: 'column', m: 2, gap: 2 }}>
 
-      {/* New Chat Button */}
-      <ListItem sx={{ mx: '0.25rem', mb: 0.5 }}>
-        <ListItemButton
+        {/* Search Input Field */}
+        <DebounceInputMemo
+          minChars={2}
+          onDebounce={setDebouncedSearchQuery}
+          debounceTimeout={300}
+          placeholder='Search...'
+          aria-label='Search'
+          endDecorator={groupingComponent}
+        />
+
+        {/* New Chat Button */}
+        <Button
           // variant='outlined'
-          variant={disableNewButton ? undefined : 'outlined'}
+          variant={disableNewButton ? undefined : 'soft'}
+          color='primary'
           disabled={disableNewButton}
           onClick={handleButtonNew}
           sx={{
             // ...PageDrawerTallItemSx,
-            px: 'calc(var(--ListItem-paddingX) - 0.25rem)',
+            justifyContent: 'flex-start',
+            padding: '0px 0.75rem',
 
             // text size
             fontSize: 'sm',
             fontWeight: 'lg',
 
             // style
-            borderRadius: 'md',
-            boxShadow: (disableNewButton || props.isMobile) ? 'none' : 'sm',
-            backgroundColor: 'background.popup',
-            transition: 'box-shadow 0.2s',
+            // backgroundColor: 'background.popup',
+            border: '1px solid',
+            borderColor: 'neutral.outlinedBorder',
+            borderRadius: 'sm',
+            '--ListItemDecorator-size': 'calc(2.5rem - 1px)', // compensate for the border
+            // boxShadow: (disableNewButton || props.isMobile) ? 'none' : 'xs',
+            // transition: 'box-shadow 0.2s',
           }}
         >
-          <ListItemDecorator><AddIcon sx={{ '--Icon-fontSize': 'var(--joy-fontSize-xl)', pl: '0.125rem' }} /></ListItemDecorator>
+          <ListItemDecorator><AddIcon sx={{ fontSize: '' }} /></ListItemDecorator>
           New chat
-        </ListItemButton>
-      </ListItem>
+        </Button>
+
+      </Box>
 
       {/*<ListDivider sx={{ mt: 0 }} />*/}
 
@@ -255,8 +285,8 @@ function ChatDrawer(props: {
             <ChatDrawerItemMemo
               key={'nav-chat-' + item.conversationId}
               item={item}
-              showSymbols={showSymbols}
-              bottomBarBasis={showSymbols ? filteredChatsBarBasis : 0}
+              showSymbols={showPersonaIcons && showSymbols}
+              bottomBarBasis={filteredChatsBarBasis}
               onConversationActivate={handleConversationActivate}
               onConversationBranch={onConversationBranch}
               onConversationDelete={handleConversationDeleteNoConfirmation}
