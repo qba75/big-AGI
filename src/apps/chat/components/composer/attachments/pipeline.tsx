@@ -2,7 +2,7 @@ import { callBrowseFetchPage } from '~/modules/browse/browse.client';
 
 import { createBase36Uid } from '~/common/util/textUtils';
 import { htmlTableToMarkdown } from '~/common/util/htmlTableToMarkdown';
-import { pdfToText } from '~/common/util/pdfUtils';
+import { pdfToImageDataURLs, pdfToText } from '~/common/util/pdfUtils';
 
 import type { Attachment, AttachmentConverter, AttachmentId, AttachmentInput, AttachmentSource } from './store-attachments';
 import type { ComposerOutputMultiPart } from '../composer.types';
@@ -132,6 +132,18 @@ export async function attachmentLoadInputAsync(source: Readonly<AttachmentSource
         });
       }
       break;
+
+    case 'ego':
+      edit({
+        label: source.label,
+        ref: source.blockTitle,
+        input: {
+          mimeType: 'ego/message',
+          data: source.textPlain,
+          dataSize: source.textPlain.length,
+        },
+      });
+      break;
   }
 
   edit({ inputLoading: false });
@@ -190,6 +202,11 @@ export function attachmentDefineConverters(sourceType: AttachmentSource['media']
     case input.mimeType.startsWith('image/'):
       converters.push({ id: 'image', name: `Image (coming soon)` });
       converters.push({ id: 'image-ocr', name: 'As Text (OCR)' });
+      break;
+
+    // EGO
+    case input.mimeType === 'ego/message':
+      converters.push({ id: 'ego-message-md', name: 'Message' });
       break;
 
     // catch-all
@@ -280,7 +297,7 @@ export async function attachmentPerformConversion(attachment: Readonly<Attachmen
 
     case 'pdf-text':
       if (!(input.data instanceof ArrayBuffer)) {
-        console.log('Expected ArrayBuffer for PDF converter, got:', typeof input.data);
+        console.log('Expected ArrayBuffer for PDF text converter, got:', typeof input.data);
         break;
       }
       // duplicate the ArrayBuffer to avoid mutation
@@ -295,7 +312,29 @@ export async function attachmentPerformConversion(attachment: Readonly<Attachmen
       break;
 
     case 'pdf-images':
-      // TODO: extract all pages as individual images
+      if (!(input.data instanceof ArrayBuffer)) {
+        console.log('Expected ArrayBuffer for PDF images converter, got:', typeof input.data);
+        break;
+      }
+      // duplicate the ArrayBuffer to avoid mutation
+      const pdfData2 = new Uint8Array(input.data.slice(0));
+      try {
+        const imageDataURLs = await pdfToImageDataURLs(pdfData2);
+        imageDataURLs.forEach((pdfImg, index) => {
+          outputs.push({
+            type: 'image-part',
+            base64Url: pdfImg.base64Url,
+            metadata: {
+              title: `Page ${index + 1}`,
+              width: pdfImg.width,
+              height: pdfImg.height,
+            },
+            collapsible: false,
+          });
+        });
+      } catch (error) {
+        console.error('Error converting PDF to images:', error);
+      }
       break;
 
     case 'image':
@@ -331,6 +370,15 @@ export async function attachmentPerformConversion(attachment: Readonly<Attachmen
       } catch (error) {
         console.error(error);
       }
+      break;
+
+    case 'ego-message-md':
+      outputs.push({
+        type: 'text-block',
+        text: inputDataToString(input.data),
+        title: ref,
+        collapsible: true,
+      });
       break;
 
     case 'unhandled':

@@ -5,9 +5,10 @@ import { SystemPurposeId, SystemPurposes } from '../../data';
 
 import { ChatActions, createDMessage, DConversationId, DMessage, getConversationSystemPurposeId, useChatStore } from '../state/store-chats';
 
-import { createBeamStore } from '~/common/beam/store-beam';
+import { createBeamVanillaStore } from '~/modules/beam/store-beam-vanilla';
 
 import { EphemeralHandler, EphemeralsStore } from './EphemeralsStore';
+import { createChatOverlayVanillaStore } from './store-chat-overlay-vanilla';
 
 
 /**
@@ -20,7 +21,8 @@ export class ConversationHandler {
   private readonly chatActions: ChatActions;
   private readonly conversationId: DConversationId;
 
-  private readonly beamStore = createBeamStore();
+  private readonly beamStore = createBeamVanillaStore();
+  private readonly overlayStore = createChatOverlayVanillaStore();
   readonly ephemeralsStore: EphemeralsStore = new EphemeralsStore();
 
 
@@ -81,13 +83,16 @@ export class ConversationHandler {
 
   messagesReplace(messages: DMessage[]): void {
     this.chatActions.setMessages(this.conversationId, messages);
+
+    // if zeroing the messages, also terminate an active beam
+    if (!messages.length)
+      this.beamStore.getState().terminateKeepingSettings();
   }
 
 
   // Beam
 
   getBeamStore = () => this.beamStore;
-
 
   /**
    * Opens a beam over the given history
@@ -97,7 +102,7 @@ export class ConversationHandler {
    * @param destReplaceMessageId If set, the output will replace the message with this id, otherwise it will append to the history
    */
   beamInvoke(viewHistory: Readonly<DMessage[]>, importMessages: DMessage[], destReplaceMessageId: DMessage['id'] | null): void {
-    const { open: beamOpen, importRays: beamImportRays, terminate: beamTerminate } = this.beamStore.getState();
+    const { open: beamOpen, importRays: beamImportRays, terminateKeepingSettings } = this.beamStore.getState();
 
     const onBeamSuccess = (messageText: string, llmId: DLLMId) => {
       // set output when going back to the chat
@@ -113,11 +118,11 @@ export class ConversationHandler {
       }
 
       // close beam
-      this.beamStore.getState().terminate();
+      terminateKeepingSettings();
     };
 
     beamOpen(viewHistory, useModelsStore.getState().chatLLMId, onBeamSuccess);
-    importMessages.length && beamImportRays(importMessages);
+    importMessages.length && beamImportRays(importMessages, useModelsStore.getState().chatLLMId);
   }
 
 
@@ -126,5 +131,10 @@ export class ConversationHandler {
   createEphemeral(title: string, initialText: string): EphemeralHandler {
     return new EphemeralHandler(title, initialText, this.ephemeralsStore);
   }
+
+
+  // Overlay Store
+
+  getOverlayStore = () => this.overlayStore;
 
 }
